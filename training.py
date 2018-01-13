@@ -10,11 +10,9 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 from sklearn.model_selection import GridSearchCV
-from sklearn.externals.joblib import dump
+from sklearn.externals.joblib import dump, load
 
-import lesson_functions
 import features
-import training
 
 def get_dataset(*glob_expr, flip=False, limit_per_expr=None, split=False, **split_kwargs):
     data = [
@@ -50,6 +48,20 @@ def select_model(base_model, param_grid, x, y, n_jobs=1, **grid_search_kwargs):
     return grid_search.cv_results_, grid_search.best_estimator_, \
            grid_search.best_score_, grid_search.best_params_
 
+def load_model(filename):
+    model = load(filename)['best_model']
+    features = model.named_steps['features']
+    classifier = model.named_steps['classifier']
+    return model, features, classifier
+
+def store_model(outfile, result, best_model, best_score, best_params):
+    dump(dict(result=result,
+              best_model=best_model,
+              best_score=best_score,
+              best_params=best_params),
+         outfile)
+
+
 @click.command()
 @click.argument('output-path')
 @click.argument('input-globs', nargs=-1)
@@ -81,11 +93,7 @@ def main(output_path, input_globs, param_grid={}, n_jobs=1, search_options={},
     outfile = output_path.format(best_params=param_id, **best_params)
 
     print("Writing output file: %r" % outfile)
-    dump(dict(result=result,
-              best_model=best_model,
-              best_score=best_score,
-              best_params=best_params),
-         outfile)
+    store_model(outfile, result, best_model, best_score, best_params)
 
 if __name__ == '__main__':
     main()
