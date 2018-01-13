@@ -97,15 +97,13 @@ def adjust_scale(img, new_shape, interp_method=cv2.INTER_LINEAR):
 
 def extract_features(img,
                      window=64,
-                     scale=1, interp_method=cv2.INTER_LINEAR,
-                     cspace='RGB',
+                     scale=1, interp_method=cv2.INTER_LINEAR, cspace='RGB',
                      hog_orient=9, hog_pix_per_cell=8, hog_cell_per_block=2,
-                     hog_cells_per_step=2,hog_channel="ALL",
-                     spatial_size=(32,32),
-                     hist_bins=32,
+                     hog_cells_per_step=2, hog_channel="ALL",
+                     spatial_size=(32,32), hist_bins=32,
 					 **_ #ignored, only for compatibility with FeatureExtraction class
 ):
-    """Define a single function that can extract features using hog sub-sampling and make predictions.
+    """Define a single function that can extract features using hog sub-sampling
     """
     windows = generate_windows(img.shape[:2], window, scale,
                                hog_orient, hog_pix_per_cell, hog_cell_per_block, hog_cells_per_step)
@@ -113,7 +111,8 @@ def extract_features(img,
     img = adjust_scale(img, next(windows))
 
     # Compute individual channel HOG features for the entire image
-    hogs = get_hog_features(img, hog_orient, hog_pix_per_cell, hog_cell_per_block, channel=hog_channel)
+    hogs = get_hog_features(img, hog_orient, hog_pix_per_cell,
+                                 hog_cell_per_block, channel=hog_channel)
     features, locations = [], []
     for hog_slices, img_slices, location in windows:
         # Extract the image patch
@@ -137,7 +136,7 @@ class FeatureExtraction(sklearn.base.TransformerMixin):
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
 
-    def set_params(self, params):
+    def set_params(self, **params):
         self.__dict__.update(params)
 
     def get_params(self, deep=False):
