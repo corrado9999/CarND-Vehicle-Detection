@@ -62,48 +62,42 @@ def draw_boxes(img, bboxes, colors=[(255, 0, 0)], thick=6, labels=None):
                         (255,)*3, 2, cv2.LINE_AA)
     return draw_img
 
-def merge_boxes(image, box_list, expand_maximum=False, heatmap=None, heat_threshold=1):
-    if heatmap is None:
-        heatmap = np.zeros_like(image[:,:,0]).astype(np.float)
-
+def merge_boxes(image, box_list, heat_thresholds=(1,1)):
     # Add heat to each box in box list
-    heatmap = add_heat(heatmap, box_list, value=1)
+    heatmap = np.zeros_like(image[:,:,0]).astype(np.float)
+    heatmap = add_heat(heatmap, box_list)
 
-    if expand_maximum:
-        # If many boxes intersect, expand the highest "heat" to the whole glob
-        labels, num_labels = scipy.ndimage.measurements.label(heatmap)
-        for slc in scipy.ndimage.find_objects(labels):
-             heatmap[slc] = heatmap[slc].max()
-
-    # Apply threshold to help remove false positives
-    heatmap[heatmap <= heat_threshold] = 0
+    # Apply first threshold to help remove false positives
+    heatmap[heatmap <= heat_thresholds[0]] = 0
 
     # Find final boxes from heatmap using label function
     labels = scipy.ndimage.measurements.label(heatmap)
-    bbox_heat = scipy.ndimage.measurements.maximum(heatmap,
-                                                   labels[0],
-                                                   index=range(1, labels[1]+1))
     bboxes = get_bboxes_from_labels(labels)
+    bbox_heat = scipy.ndimage.measurements.median(heatmap,
+                                                labels[0],
+                                                index=range(1, labels[1]+1))
 
+    # Apply second threshold to help remove false positives
+    bboxes, bbox_heat = tuple(zip(*[(b,h) for b,h in zip(bboxes, bbox_heat)
+                                          if h > heat_thresholds[1]])) or ((), ())
     return bboxes, bbox_heat, heatmap
 
 class CarTracker(object):
     def __init__(self, extract_features, predict,
                  yranges=((400, 700),), scales=(1,), hog_cells_per_step=2,
                  colors=((32, 32, 192),), merge_boxes=True,
-                 expand_maximum=True, heat_threshold=1,
-                 fir_length=10,
+                 heat_thresholds=(1,1), fir_length=10,
 ):
         self.extract_features = extract_features
         self.predict = predict
         self.yranges = yranges
         self.scales = scales
         self.hog_cells_per_step = hog_cells_per_step
+        self.fir_length = fir_length
         self.last_boxes = collections.deque((), fir_length)
         self.heatmap = None
-        self.heat_threshold = heat_threshold
+        self.heat_thresholds = heat_thresholds
         self.colors = colors
-        self.expand_maximum = expand_maximum
         self.merge_boxes = merge_boxes
         self.default_values = self.__dict__.copy()
 
@@ -122,13 +116,12 @@ class CarTracker(object):
                           )
         if return_unmerged:
             unmerged = draw_boxes(image, bboxes, colors=self.colors)[..., [2,1,0]]
-        self.last_boxes.appendleft(bboxes)
+        self.last_boxes.append(bboxes)
         bboxes = [bb for last in self.last_boxes for bb in last]
 
         if self.merge_boxes:
             bboxes, bbox_heat, self.heatmap = merge_boxes(
-                   image, bboxes, self.expand_maximum,
-                   heat_threshold=self.heat_threshold)
+                   image, bboxes, heat_thresholds=self.heat_thresholds)
             labels = ["%.0f" % x for x in bbox_heat]
 
         result = draw_boxes(image, bboxes, colors=self.colors, labels=labels)[..., [2,1,0]]
